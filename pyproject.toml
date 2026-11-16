@@ -1,0 +1,11 @@
+[project]
+name = "blackjack-lab"
+version = "0.1.0"
+description = "MPCS 56430 Module 8: blackjack by simulation, as a Slurm array and with MPI"
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib",
+    "mpi4py",
+    "mpich",
+    "numpy",
+]

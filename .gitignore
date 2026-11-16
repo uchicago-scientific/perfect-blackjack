@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+logs/
+# results, when BLACKJACK_LAB points inside this folder
+shared/

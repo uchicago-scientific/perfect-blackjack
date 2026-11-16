@@ -225,6 +225,8 @@ button.act:disabled { opacity: 0.35; cursor: default; }
 .panel button:hover { background: #F6EAF8; }
 .panel button.primary { background: var(--purple); color: white; }
 .panel button.primary:hover { background: var(--purple-2); }
+.panel button kbd { font: inherit; opacity: 0.7; margin-left: 3px; }
+#chart-body { margin-top: 4px; }
 .panel button:disabled { opacity: 0.4; cursor: default; }
 .panel select, .panel input[type=number] { font: inherit; font-size: 13.5px; padding: 2px 4px; }
 .panel input[type=number] { width: 80px; }
@@ -340,9 +342,10 @@ dialog button.primary { background: var(--purple); color: white; }
   <div class="side">
     <section class="panel" aria-label="Strategy chart">
       <h2>Strategy chart: <span class="name" id="chart-name"></span></h2>
-      <p>The coach and both simulations below follow this chart. Click a cell
-        to switch it between H and S.</p>
+      <p>The coach and both simulations below follow this chart. Show it to
+        see it or change it: click a cell to switch it between H and S.</p>
       <div class="row">
+        <button class="primary" id="toggle-chart" aria-expanded="false">Show chart <kbd>T</kbd></button>
         <button id="load-basic">Basic strategy</button>
         <button id="load-start">Starting guess</button>
         <button id="load-file">Open a CSV…</button>
@@ -350,6 +353,7 @@ dialog button.primary { background: var(--purple); color: white; }
         <button id="download">Download CSV</button>
         <input type="file" id="file" accept=".csv,text/csv,text/plain" hidden>
       </div>
+      <div id="chart-body" hidden>
       <div class="grids">
         <table class="chart" id="grid-hard"></table>
         <table class="chart" id="grid-soft"></table>
@@ -359,6 +363,7 @@ dialog button.primary { background: var(--purple); color: white; }
         <span><span class="sw" style="background: var(--purple)"></span>S stand</span>
         <span><span class="sw" style="outline: 3px solid #00C853; outline-offset: -3px"></span>your hand now</span>
         <label><input type="checkbox" id="mark-diff"> <span class="sw" style="box-shadow: inset 0 0 0 2.5px #E53935"></span>mark cells that differ from basic strategy</label>
+      </div>
       </div>
       <div class="differ" id="differ"></div>
     </section>
@@ -563,6 +568,14 @@ function describeCell(cell) {
 
 function cellArgs(cell) {
   return `--hand ${BJ.HAND_NAMES[Math.floor(cell / 10)]} --up ${BJ.UP_NAMES[cell % 10]}`;
+}
+
+// The chart starts hidden, so the table doesn't give the answer away.
+function toggleChart() {
+  const body = $("chart-body");
+  body.hidden = !body.hidden;
+  $("toggle-chart").innerHTML = `${body.hidden ? "Show" : "Hide"} chart <kbd>T</kbd>`;
+  $("toggle-chart").setAttribute("aria-expanded", String(!body.hidden));
 }
 
 function setChart(chart, name) {
@@ -934,6 +947,7 @@ function setup() {
   document.querySelectorAll("table.chart td").forEach((td) =>
     td.addEventListener("click", () => toggleCell(Number(td.dataset.cell))));
   $("mark-diff").addEventListener("change", renderChart);
+  $("toggle-chart").addEventListener("click", toggleChart);
 
   $("hit").addEventListener("click", hit);
   $("stand").addEventListener("click", stand);
@@ -981,6 +995,7 @@ function setup() {
     else if (k === "s") stand();
     else if (k === "?") hint();
     else if (k === "n" || (k === "enter" && e.target === document.body)) deal();
+    else if (k === "t") toggleChart();
     else if (k === "c") {
       $("coach").checked = !$("coach").checked;
       S.coach = $("coach").checked;

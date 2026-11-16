@@ -16,15 +16,18 @@ On a login node (compute nodes have no internet access, so this has to run
 here):
 
 ```
+curl -LsSf https://astral.sh/uv/install.sh | sh    # install uv, once
+source $HOME/.local/bin/env
 git clone https://github.com/uchicago-scientific/perfect-blackjack.git ~/blackjack
 cd ~/blackjack
 uv sync --locked
 mkdir -p logs
 ```
 
-Run every command below from `~/blackjack`. Slurm writes each job's output to
-`logs/`, and does not create that folder itself. If `uv` is not installed:
-`curl -LsSf https://astral.sh/uv/install.sh | sh`, then sign out and back in.
+The first two lines install uv in `~/.local/bin` and put it on your `PATH`
+for this session; later sessions find it on their own. If `uv --version`
+already works, skip them. Run every command below from `~/blackjack`. Slurm
+writes each job's output to `logs/`, and does not create that folder itself.
 
 The example outputs in these READMEs come from a laptop, with the shared
 folder shown as Midway3's. On Midway3 the cells, flips and tables are the
@@ -120,14 +123,17 @@ browser.
   chart starts as basic strategy, the correct one
 - **Deal:** buttons deal the four hands from the opening vote, or a hand you
   pick, every time until you choose another
-- **Chart:** click a cell to switch it between H and S, or load the starting
-  guess, a CSV file, or a table pasted from Midway3. **Download CSV** saves it
+- **Chart:** hidden until you press **Show chart**, so it doesn't give the
+  answers away. Click a cell to switch it between H and S, or load the
+  starting guess, a CSV file, or a table pasted from Midway3. **Download
+  CSV** saves it
 - **Simulate:** plays hit and stand from the current hand as many times as
   you choose, the same calculation as `blackjack.py cell`
 - **Score:** plays whole hands by the chart, and by basic strategy on the
   same cards, so even a change to one cell shows
 
-Keys: `h` hit, `s` stand, `n` next hand, `?` hint, `c` coach on or off.
+Keys: `h` hit, `s` stand, `n` next hand, `?` hint, `t` show or hide the
+chart, `c` coach on or off.
 
 To score charts from the command line, `blackjack.py score` plays a million
 whole hands by each:

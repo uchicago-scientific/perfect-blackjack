@@ -60,7 +60,7 @@ def main():
     elapsed = MPI.Wtime() - start
     if rank == 0:
         ranks = f"{size} rank" + ("s" if size > 1 else "")
-        print(f"\n{ranks}, {rnd} rounds, {a.hands:,} hands per action: {elapsed:.1f} s\n")
+        print(f"\n{ranks}, {rnd} round{'s' if rnd > 1 else ''}, {a.hands:,} hands per action: {elapsed:.1f} s\n")
         bj.show(table)
         if a.out:
             bj.write_table(table, a.out)

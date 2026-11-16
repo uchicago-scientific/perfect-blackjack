@@ -43,13 +43,15 @@ uv run python blackjack.py cell --hand H13 --up 2 --hands 100000
 
 ### 1. Slurm job array: [`slurm/`](slurm/)
 
-Each round is 27 independent tasks, one per row. Their results meet in files,
-and a separate job writes the next table.
+Each round is 27 independent tasks, one per row, submitted as one array job.
+Their results meet in files, and a separate job writes the next table. In
+class, the instructor runs these and everyone watches the queue and the
+shared folder.
 
 ```
-sbatch --array=4-5 --export=ALL,ROUND=1 slurm/array_round.sbatch   # rows 4 and 5 of round 1
-uv run python slurm/assemble.py --round 1                          # instructor: the next table
-bash slurm/chain.sh 2 4                                            # instructor: rounds 2 to 4
+sbatch --export=ALL,ROUND=1 slurm/array_round.sbatch   # round 1: all 27 rows
+uv run python slurm/assemble.py --round 1              # the next table
+bash slurm/chain.sh 2 4                                # rounds 2 to 4
 ```
 
 ### 2. MPI: [`mpi/`](mpi/)
@@ -58,8 +60,9 @@ One job runs every round. N copies of one program, the ranks, pass the table
 and the results to each other as messages.
 
 ```
-uv run mpiexec -n 4 python mpi/hello_mpi.py     # hello, on the login node
-sbatch --ntasks=8 mpi/mpi.sbatch                # every round, 8 ranks
+uv run mpiexec -n 4 python mpi/hello_mpi.py                                 # hello, login node
+uv run mpiexec -n 4 python mpi/mpi_policy.py --max-rounds 1 --hands 100000  # one round, login node
+sbatch --ntasks=8 mpi/mpi.sbatch                                            # every round, 8 ranks
 ```
 
 ### 3. multiprocessing: [`multiprocessing/`](multiprocessing/)
@@ -74,7 +77,8 @@ sbatch --cpus-per-task=8 multiprocessing/pool.sbatch    # every round, 8 workers
 ### Compare
 
 Each MPI and multiprocessing job appends its time to `times.csv` in the shared
-folder. In class, everyone runs both with the same number of workers:
+folder. In class, everyone counts off from 1 to 14 and runs both with the
+same number of workers:
 
 | Your number | Workers | Commands |
 |---|---|---|

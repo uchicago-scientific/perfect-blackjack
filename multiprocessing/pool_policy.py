@@ -56,7 +56,7 @@ def main():
         elapsed = time.perf_counter() - start
 
     workers = f"{a.workers} worker" + ("s" if a.workers > 1 else "")
-    print(f"\n{workers}, {rnd} rounds, {a.hands:,} hands per action: {elapsed:.1f} s\n")
+    print(f"\n{workers}, {rnd} round{'s' if rnd > 1 else ''}, {a.hands:,} hands per action: {elapsed:.1f} s\n")
     bj.show(table)
     if a.out:
         bj.write_table(table, a.out)

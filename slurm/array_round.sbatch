@@ -1,9 +1,12 @@
 #!/bin/bash
 # One round of the blackjack table as a job array: one task per row of 10
-# cells. Submit from the repository's top folder, choosing the rows and the
+# cells, all 27 rows. Submit from the repository's top folder, choosing the
 # round on the command line:
 #
-#   sbatch --array=4-5 --export=ALL,ROUND=1 slurm/array_round.sbatch
+#   sbatch --export=ALL,ROUND=1 slurm/array_round.sbatch
+#
+# --array on the command line runs only some rows, for example to rerun the
+# ones that failed: sbatch --array=4-5 --export=ALL,ROUND=1 ...
 #
 # Every task is independent: it reads the round's table, simulates its row,
 # and writes row-NN.csv to the round's folder. No task talks to another.

@@ -40,6 +40,27 @@ run, because the ranks run at the same time. Only rank 0 prints the sum,
 because of `if rank == 0`. On a compute node with 8 ranks, the job's log in
 `logs/bj-hello-<job id>.out` has 8 rank lines and the sum 28.
 
+## One round
+
+```
+$ uv run mpiexec -n 4 python mpi/mpi_policy.py --max-rounds 1 --hands 100000
+round 1:  41 cells flipped (   1.2 s)
+
+4 ranks, 1 round, 100,000 hands per action: 1.2 s
+
+       2  3  4  5  6  7  8  9 10  A
+H4     H  H  H  H  H  H  H  H  H  H
+H5     H  H  H  S  H  H  H  H  H  H
+H6     H  H  S  S  S  H  H  H  H  H
+...
+```
+
+`--max-rounds 1` stops after the first round: the same 41 flips as the job
+array's round 1, from one program. With 100,000 hands per action it takes a
+few seconds, short enough for a login node; at the default 2,000,000, one
+round takes about a minute on 4 ranks, so run that as a job. Leave off
+`--times` for a test like this, so it stays out of the class's `times.csv`.
+
 ## Every round in one job
 
 ```

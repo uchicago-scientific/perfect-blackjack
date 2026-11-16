@@ -31,8 +31,9 @@ gets `$SLURM_ARRAY_TASK_ID` = *k* and simulates row *k*. `--export=ALL,ROUND=1`
 passes `ROUND=1` to the script, along with your environment; `HANDS` can be
 passed the same way (default 2,000,000).
 
-In class, the 27 rows are split: number *k* of 14 runs rows 2*k* − 2 and
-2*k* − 1, and number 14 runs row 26. Number 3 runs `--array=4-5`.
+In class, the instructor submits round 1 as one array job, all 27 rows, and
+everyone watches it with `squeue -u <instructor-cnetid>` and `ls` on the
+round's folder. `--array=4-5` is for rerunning rows that failed.
 
 Each task runs `row.py`:
 

@@ -9,4 +9,4 @@
 #SBATCH --time=00:05:00
 #SBATCH --output=logs/%x-%j.out
 
-uv run --offline python assemble.py --round "${ROUND:?set ROUND}"
+uv run --offline python slurm/assemble.py --round "${ROUND:?set ROUND}"

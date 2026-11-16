@@ -1,5 +1,7 @@
 #!/bin/bash
-# Hello, MPI, as a batch job:  sbatch --ntasks=8 hello.sbatch
+# Hello, MPI, as a batch job. From the repository's top folder:
+#
+#   sbatch --ntasks=8 mpi/hello.sbatch
 #SBATCH --account=mpcs56430
 #SBATCH --partition=caslake
 #SBATCH --job-name=bj-hello
@@ -9,4 +11,4 @@
 #SBATCH --time=00:05:00
 #SBATCH --output=logs/%x-%j.out
 
-uv run --offline mpiexec -n "$SLURM_NTASKS" python hello_mpi.py
+uv run --offline mpiexec -n "$SLURM_NTASKS" python mpi/hello_mpi.py

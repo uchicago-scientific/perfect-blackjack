@@ -1,7 +1,7 @@
 [project]
-name = "blackjack-lab"
+name = "perfect-blackjack"
 version = "0.1.0"
-description = "MPCS 56430 Module 8: blackjack by simulation, as a Slurm array and with MPI"
+description = "MPCS 56430 Module 8: blackjack by simulation, as a Slurm job array, with MPI and with multiprocessing"
 requires-python = ">=3.13"
 dependencies = [
     "matplotlib",
@@ -9,3 +9,12 @@ dependencies = [
     "mpich",
     "numpy",
 ]
+
+# Install blackjack.py as a module, so the scripts in slurm/, mpi/ and
+# multiprocessing/ can all import it.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["blackjack.py"]

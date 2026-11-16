@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Perfect Blackjack · MPCS 56430</title>
+<style>
+:root {
+  --purple: #711E7C;
+  --purple-2: #8D269B;
+  --gold: #ECA414;
+  --grey: #4F4F4F;
+  --felt: #1B5E20;
+  --felt-dark: #0F3D14;
+  --red: #C1121F;
+  --loss: #FF8A80;
+  --page: #F3F1F4;
+  --card-w: 88px;
+  --card-h: 124px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: #222;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+header {
+  background: var(--purple);
+  color: white;
+  padding: 10px 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+header h1 { margin: 0; font-size: 22px; letter-spacing: 0.02em; }
+header h1 span { color: var(--gold); }
+header .course { opacity: 0.8; font-size: 14px; }
+header details { margin-left: auto; font-size: 14px; }
+header summary { cursor: pointer; color: var(--gold); font-weight: 600; }
+header details ul { margin: 6px 0 0; padding-left: 18px; max-width: 520px; }
+
+main {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) minmax(420px, 600px);
+  gap: 18px;
+  padding: 18px 24px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  main { grid-template-columns: 1fr; padding: 12px; }
+}
+
+/* ---------------------------------------------------------- the table */
+.felt {
+  background: radial-gradient(ellipse at 50% 25%, #2E7D32 0%, var(--felt) 55%, var(--felt-dark) 100%);
+  border: 10px solid #3E2A1A;
+  border-radius: 22px;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45), 0 6px 18px rgba(0, 0, 0, 0.25);
+  color: white;
+  padding: 16px 22px 14px;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.practice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+.practice .label { color: var(--gold); font-weight: 700; margin-right: 4px; }
+.chip {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(0, 0, 0, 0.18);
+  color: white;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: inherit;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--gold); }
+.chip.active { background: var(--gold); border-color: var(--gold); color: #222; font-weight: 700; }
+.practice select {
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: var(--felt-dark);
+  color: white;
+  padding: 3px 4px;
+}
+.seat { min-height: calc(var(--card-h) + 52px); }
+.seat .who { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; opacity: 0.8; }
+.seat .total { font-size: 18px; font-weight: 600; margin-top: 6px; }
+.seat .total .note { color: var(--gold); font-weight: 400; font-size: 14px; margin-left: 10px; }
+.cards { display: flex; gap: 10px; margin-top: 6px; min-height: var(--card-h); perspective: 600px; }
+.cards.crowded .card + .card { margin-left: calc(var(--card-w) * -0.45); }
+
+/* ---------------------------------------------------------- cards */
+.card {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+  flex: none;
+  border-radius: 9px;
+  background: #FFFDF7;
+  color: #1A1A1A;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  font-family: Georgia, "Times New Roman", serif;
+  user-select: none;
+}
+.card.red { color: var(--red); }
+.card .corner {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  text-align: center;
+  line-height: 1;
+  font-weight: 700;
+  font-size: calc(var(--card-w) * 0.19);
+  letter-spacing: -0.04em;
+}
+.card .corner .s { display: block; font-size: 0.85em; margin-top: 1px; }
+.card .corner.br { top: auto; left: auto; bottom: 5px; right: 6px; transform: rotate(180deg); }
+.card .pip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--card-w) * 0.21);
+  line-height: 1;
+}
+.card .pip.down { transform: translate(-50%, -50%) rotate(180deg); }
+.card .pip.ace { font-size: calc(var(--card-w) * 0.55); }
+.card .face {
+  position: absolute;
+  inset: 20% 22%;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(236, 164, 20, 0.16), rgba(113, 30, 124, 0.10));
+}
+.card .face .letter { font-size: calc(var(--card-w) * 0.42); font-weight: 700; line-height: 1; }
+.card .face .s { font-size: calc(var(--card-w) * 0.2); line-height: 1; }
+.card.back {
+  background:
+    repeating-linear-gradient(45deg, rgba(236, 164, 20, 0.55) 0 2px, transparent 2px 10px),
+    repeating-linear-gradient(-45deg, rgba(236, 164, 20, 0.55) 0 2px, transparent 2px 10px),
+    var(--purple);
+  border: 5px solid #FFFDF7;
+}
+.card.dealt { animation: deal 0.3s ease-out both; }
+.card.flip { animation: flip 0.35s ease-out both; }
+@keyframes deal {
+  from { opacity: 0; transform: translate(60px, -70px) rotate(-8deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes flip {
+  from { transform: rotateY(90deg); }
+  to { transform: none; }
+}
+
+/* ---------------------------------------------------------- buttons */
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button.act {
+  font: inherit;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+button.act kbd { font: inherit; font-weight: 400; opacity: 0.7; margin-left: 4px; }
+button.act:disabled { opacity: 0.35; cursor: default; }
+#hit { background: var(--gold); color: #222; }
+#stand { background: var(--purple-2); color: white; }
+#hint { background: transparent; color: white; border: 1px solid rgba(255, 255, 255, 0.5); }
+#next { background: #FFFDF7; color: #222; }
+.coach-toggle { margin-left: auto; font-size: 14px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.messages { min-height: 72px; font-size: 15px; }
+.messages div { margin: 2px 0; }
+.messages .good { color: var(--gold); }
+.messages .bad { color: var(--loss); font-weight: 600; }
+.messages .dim { opacity: 0.7; }
+.messages .outcome { font-weight: 700; font-size: 17px; }
+.messages .outcome.win { color: var(--gold); }
+.messages .outcome.lose { color: var(--loss); }
+.stats {
+  margin-top: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.stats .match { color: var(--gold); }
+
+/* ---------------------------------------------------------- side panels */
+.side { display: flex; flex-direction: column; gap: 14px; }
+.panel {
+  background: white;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.panel h2 { margin: 0 0 6px; font-size: 16px; color: var(--purple); }
+.panel h2 .name { color: #222; font-weight: 600; }
+.panel p { margin: 4px 0 8px; font-size: 13.5px; color: #444; }
+.panel .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; font-size: 14px; }
+.panel button {
+  font: inherit;
+  font-size: 13.5px;
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  background: white;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.panel button:hover { background: #F6EAF8; }
+.panel button.primary { background: var(--purple); color: white; }
+.panel button.primary:hover { background: var(--purple-2); }
+.panel button:disabled { opacity: 0.4; cursor: default; }
+.panel select, .panel input[type=number] { font: inherit; font-size: 13.5px; padding: 2px 4px; }
+.panel input[type=number] { width: 80px; }
+.differ { font-size: 13px; color: #666; }
+.grids { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; margin-top: 6px; }
+table.chart { border-collapse: collapse; font-size: 12px; }
+table.chart th { font-weight: 700; color: #444; padding: 0 2px; text-align: center; }
+table.chart th.rowname { text-align: right; padding-right: 5px; }
+table.chart td {
+  width: 23px;
+  height: 19px;
+  text-align: center;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid white;
+  position: relative;
+}
+table.chart td.h { background: var(--gold); color: #222; }
+table.chart td.s { background: var(--purple); color: white; }
+table.chart td:hover { outline: 2px solid #222; outline-offset: -2px; }
+table.chart td.now { outline: 3px solid #00C853; outline-offset: -3px; }
+table.chart td.diff { box-shadow: inset 0 0 0 2.5px #E53935; }
+.key { display: flex; gap: 12px; font-size: 12.5px; color: #444; margin-top: 8px; flex-wrap: wrap; }
+.key span.sw { display: inline-block; width: 14px; height: 12px; vertical-align: -1px; margin-right: 4px; }
+pre.out {
+  background: #1E1E1E;
+  color: #EDEDED;
+  border-radius: 8px;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 8px 0 0;
+  white-space: pre;
+}
+pre.out:empty { display: none; }
+pre.out .cmd { display: block; margin-top: 4px; color: #9E9E9E; white-space: pre-wrap; }
+.tally { font-size: 14px; margin: 4px 0; }
+.tally b { color: var(--purple); }
+progress { width: 140px; height: 10px; accent-color: var(--purple); }
+progress[hidden] { display: none; }
+.history { font-size: 13px; margin: 8px 0 0; padding-left: 18px; color: #333; }
+.history:empty { display: none; }
+code { font-size: 12.5px; background: #F1ECF2; padding: 0 3px; border-radius: 3px; }
+footer { padding: 6px 24px 24px; font-size: 13px; color: #666; }
+footer a { color: var(--purple); }
+
+dialog { border: none; border-radius: 12px; padding: 18px 20px; max-width: 560px; width: 92vw; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog h2 { margin: 0 0 6px; color: var(--purple); font-size: 17px; }
+dialog p { margin: 4px 0 8px; font-size: 14px; }
+dialog textarea { width: 100%; height: 260px; font: 13px/1.35 ui-monospace, Menlo, Consolas, monospace; }
+dialog .error { color: #B71C1C; font-size: 14px; min-height: 1.4em; }
+dialog .buttons { display: flex; gap: 8px; justify-content: flex-end; }
+dialog button { font: inherit; border-radius: 6px; padding: 5px 14px; border: 1px solid var(--purple); background: white; color: var(--purple); cursor: pointer; }
+dialog button.primary { background: var(--purple); color: white; }
+
+@media (max-width: 640px) {
+  :root { --card-w: 62px; --card-h: 88px; }
+  header { padding: 8px 12px; }
+  .felt { padding: 12px; min-height: 0; border-width: 6px; }
+  .coach-toggle { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Perfect <span>Blackjack</span></h1>
+  <div class="course">MPCS 56430 · Module 8</div>
+  <details>
+    <summary>The rules</summary>
+    <ul>
+      <li>Cards 2 to 9 count their number; 10, J, Q and K count 10; an ace counts 11 or 1</li>
+      <li>An infinite deck: every card is drawn with replacement, so the chances never change</li>
+      <li>You see one dealer card, the upcard. Hit (take a card) or stand (stop); over 21 is a bust and loses at once</li>
+      <li>The dealer hits on 16 or less and stands on 17 or more, soft 17 included</li>
+      <li>Closer to 21 wins; a tie is a push and the bet comes back</li>
+      <li>Blackjack (21 in two cards) pays 3 to 2. A dealer blackjack beats every other hand; it shows when the hole card turns over</li>
+      <li>Only hit or stand: no doubling, splitting, surrender or insurance</li>
+    </ul>
+  </details>
+</header>
+
+<main>
+  <section class="felt" aria-label="The table">
+    <div class="practice" id="practice">
+      <span class="label">Deal</span>
+    </div>
+
+    <div class="seat">
+      <div class="who">Dealer</div>
+      <div class="cards" id="dealer-cards"></div>
+      <div class="total" id="dealer-total"></div>
+    </div>
+    <div class="seat">
+      <div class="who">You</div>
+      <div class="cards" id="player-cards"></div>
+      <div class="total" id="player-total"></div>
+    </div>
+
+    <div class="actions">
+      <button class="act" id="hit">Hit<kbd>H</kbd></button>
+      <button class="act" id="stand">Stand<kbd>S</kbd></button>
+      <button class="act" id="hint">Hint<kbd>?</kbd></button>
+      <button class="act" id="next">Next hand<kbd>N</kbd></button>
+      <label class="coach-toggle"><input type="checkbox" id="coach" checked> Coach <kbd>C</kbd></label>
+    </div>
+    <div class="messages" id="messages" aria-live="polite"></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <div class="side">
+    <section class="panel" aria-label="Strategy chart">
+      <h2>Strategy chart: <span class="name" id="chart-name"></span></h2>
+      <p>The coach and both simulations below follow this chart. Click a cell
+        to switch it between H and S.</p>
+      <div class="row">
+        <button id="load-basic">Basic strategy</button>
+        <button id="load-start">Starting guess</button>
+        <button id="load-file">Open a CSV…</button>
+        <button id="load-paste">Paste…</button>
+        <button id="download">Download CSV</button>
+        <input type="file" id="file" accept=".csv,text/csv,text/plain" hidden>
+      </div>
+      <div class="grids">
+        <table class="chart" id="grid-hard"></table>
+        <table class="chart" id="grid-soft"></table>
+      </div>
+      <div class="key">
+        <span><span class="sw" style="background: var(--gold)"></span>H hit</span>
+        <span><span class="sw" style="background: var(--purple)"></span>S stand</span>
+        <span><span class="sw" style="outline: 3px solid #00C853; outline-offset: -3px"></span>your hand now</span>
+        <label><input type="checkbox" id="mark-diff"> <span class="sw" style="box-shadow: inset 0 0 0 2.5px #E53935"></span>mark cells that differ from basic strategy</label>
+      </div>
+      <div class="differ" id="differ"></div>
+    </section>
+
+    <section class="panel" aria-label="This hand">
+      <h2>This hand: <span class="name" id="cell-name"></span></h2>
+      <div class="tally" id="tally"></div>
+      <div class="row">
+        Simulate
+        <select id="cell-hands">
+          <option value="1000">1,000</option>
+          <option value="10000">10,000</option>
+          <option value="100000" selected>100,000</option>
+          <option value="1000000">1,000,000</option>
+        </select>
+        hands of each choice
+        <button class="primary" id="simulate">Simulate</button>
+        <progress id="cell-progress" max="1" value="0" hidden></progress>
+      </div>
+      <pre class="out" id="cell-out"></pre>
+    </section>
+
+    <section class="panel" aria-label="Score the chart">
+      <h2>Score the chart</h2>
+      <p>Plays whole hands by the chart, a $1 bet on each, and compares it with
+        basic strategy on the same cards.</p>
+      <div class="row">
+        Play
+        <select id="score-hands">
+          <option value="100000">100,000</option>
+          <option value="1000000" selected>1,000,000</option>
+          <option value="10000000">10,000,000</option>
+        </select>
+        hands
+        <button class="primary" id="score">Score</button>
+        <progress id="score-progress" max="1" value="0" hidden></progress>
+        <span style="margin-left:auto">seed <input type="number" id="seed" value="56430" min="0" step="1"></span>
+      </div>
+      <pre class="out" id="score-out"></pre>
+      <ol class="history" id="history" reversed></ol>
+    </section>
+  </div>
+</main>
+
+<footer>
+  The lab and its code: <a href="https://github.com/uchicago-scientific/perfect-blackjack">github.com/uchicago-scientific/perfect-blackjack</a>.
+  © 2026 Andrew Binkowski. All rights reserved.
+</footer>
+
+<dialog id="paste-dialog">
+  <h2>Paste a chart</h2>
+  <p>A table CSV: the line <code>hand,2,3,4,5,6,7,8,9,10,A</code>, then one line
+    per hand. On Midway3, print one with
+    <code>cat /project/mpcs56430/2026-autumn/blackjack/table-round-2.csv</code>
+    and copy all 28 lines.</p>
+  <textarea id="paste-text" spellcheck="false" placeholder="hand,2,3,4,5,6,7,8,9,10,A&#10;H4,H,H,H,H,H,H,H,H,H,H&#10;..."></textarea>
+  <div class="error" id="paste-error"></div>
+  <div class="buttons">
+    <button id="paste-cancel">Cancel</button>
+    <button class="primary" id="paste-use">Use this chart</button>
+  </div>
+</dialog>
+
+<script src="blackjack.js"></script>
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const SUIT_NAMES = { "♠": "spades", "♥": "hearts", "♦": "diamonds", "♣": "clubs" };
+const DEALER_PAUSE = 650;
+
+// ?seed=N deals the same cards every time.
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const params = new URLSearchParams(location.search);
+const random = params.has("seed") ? mulberry32(Number(params.get("seed"))) : Math.random;
+
+// The four hands from the opening vote, then any hand picked from the lists.
+const PRACTICE = [
+  { label: "Hard 17 vs 10", hand: "H17", up: "10" },
+  { label: "Soft 17 (ace, 6) vs 7", hand: "S17", up: "7" },
+  { label: "Hard 16 vs 7", hand: "H16", up: "7" },
+  { label: "Hard 12 vs 6", hand: "H12", up: "6" },
+];
+
+const S = {
+  chart: Uint8Array.from(BJ.CHARTS.basic.chart),
+  chartName: BJ.CHARTS.basic.name,
+  coach: true,
+  phase: "over",            // "player", "dealer" or "over"
+  player: [],
+  dealer: [],
+  startCell: null,          // the cell of the first choice, or null
+  firstChoice: null,
+  lines: [],
+  hands: 0, won: 0, lost: 0, pushed: 0, money: 0, choices: 0, matched: 0,
+  practice: null,           // {hand, up, label}, or null for any hand
+  tally: {},                // cell -> {hit: [n, sum], stand: [n, sum]}
+  shown: { dealer: 0, player: 0, hole: false },
+  deal: 0,                  // counts deals, for the opening animation
+  busy: false,
+};
+
+// ------------------------------------------------------------ drawing cards
+
+const PIPS = {
+  2: [[50, 23], [50, 77]],
+  3: [[50, 23], [50, 50], [50, 77]],
+  4: [[37, 23], [63, 23], [37, 77], [63, 77]],
+  5: [[37, 23], [63, 23], [50, 50], [37, 77], [63, 77]],
+  6: [[37, 23], [63, 23], [37, 50], [63, 50], [37, 77], [63, 77]],
+  7: [[37, 23], [63, 23], [50, 36], [37, 50], [63, 50], [37, 77], [63, 77]],
+  8: [[37, 23], [63, 23], [50, 36], [37, 50], [63, 50], [50, 64], [37, 77], [63, 77]],
+  9: [[37, 23], [63, 23], [37, 41], [63, 41], [50, 50], [37, 59], [63, 59], [37, 77], [63, 77]],
+  10: [[37, 23], [63, 23], [50, 32], [37, 41], [63, 41], [37, 59], [63, 59], [50, 68], [37, 77], [63, 77]],
+};
+
+function cardEl(card, hidden) {
+  const el = document.createElement("div");
+  el.className = "card";
+  if (hidden) {
+    el.classList.add("back");
+    el.setAttribute("aria-label", "face-down card");
+    return el;
+  }
+  const red = card.suit === "♥" || card.suit === "♦";
+  if (red) el.classList.add("red");
+  el.setAttribute("aria-label", `${card.rank} of ${SUIT_NAMES[card.suit]}`);
+  const corner = `<span>${card.rank}</span><span class="s">${card.suit}</span>`;
+  let body = "";
+  if (card.rank === "A") {
+    body = `<div class="pip ace" style="left:50%;top:50%">${card.suit}</div>`;
+  } else if (["J", "Q", "K"].includes(card.rank)) {
+    body = `<div class="face"><span class="s">${card.suit}</span><span class="letter">${card.rank}</span><span class="s">${card.suit}</span></div>`;
+  } else {
+    body = PIPS[card.rank].map(([x, y]) =>
+      `<div class="pip${y > 52 ? " down" : ""}" style="left:${x}%;top:${y}%">${card.suit}</div>`).join("");
+  }
+  el.innerHTML = `<div class="corner">${corner}</div>${body}<div class="corner br">${corner}</div>`;
+  return el;
+}
+
+// Draw a hand. Cards not shown before slide in; a hole card turning over flips.
+function drawHand(box, cards, which, hideHole) {
+  box.innerHTML = "";
+  box.classList.toggle("crowded", cards.length > 5);
+  const before = S.shown[which];
+  cards.forEach((c, i) => {
+    const hidden = hideHole && i === 1;
+    const el = cardEl(c, hidden);
+    if (i >= before) {
+      el.classList.add("dealt");
+      if (before === 0) {
+        // the opening deal alternates: you, dealer, you, dealer
+        el.style.animationDelay = `${(which === "player" ? 0 : 120) + i * 240}ms`;
+      }
+    } else if (which === "dealer" && i === 1 && !hidden && !S.shown.hole) {
+      el.classList.add("flip");
+    }
+    box.appendChild(el);
+  });
+  S.shown[which] = cards.length;
+  if (which === "dealer") S.shown.hole = !hideHole;
+}
+
+// ------------------------------------------------------------ the chart
+
+function differences() {
+  let n = 0;
+  for (let i = 0; i < 270; i++) n += S.chart[i] !== BJ.CHARTS.basic.chart[i];
+  return n;
+}
+
+function buildGrid(table, rows) {
+  const head = document.createElement("tr");
+  head.innerHTML = "<th></th>" + BJ.UP_NAMES.map((u) => `<th>${u}</th>`).join("");
+  table.appendChild(head);
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<th class="rowname">${BJ.HAND_NAMES[r]}</th>`;
+    for (let c = 0; c < 10; c++) {
+      const td = document.createElement("td");
+      td.dataset.cell = r * 10 + c;
+      td.title = `${describeCell(r * 10 + c)}: click to switch`;
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+}
+
+function describeCell(cell) {
+  const { soft, total } = BJ.ROWS[Math.floor(cell / 10)];
+  const up = BJ.UP_NAMES[cell % 10];
+  return `${soft ? "soft" : "hard"} ${total} ${up === "A" ? "against an ace" : `against ${up === "8" ? "an" : "a"} ${up}`}`;
+}
+
+function cellArgs(cell) {
+  return `--hand ${BJ.HAND_NAMES[Math.floor(cell / 10)]} --up ${BJ.UP_NAMES[cell % 10]}`;
+}
+
+function setChart(chart, name) {
+  S.chart = Uint8Array.from(chart);
+  S.chartName = name;
+  render();
+}
+
+function toggleCell(cell) {
+  S.chart[cell] ^= 1;
+  S.chartName = "your chart";
+  render();
+}
+
+function renderChart() {
+  const now = S.phase === "player" ? BJ.cellOf(S.player, S.dealer[0]) : -1;
+  const mark = $("mark-diff").checked;
+  document.querySelectorAll("table.chart td").forEach((td) => {
+    const cell = Number(td.dataset.cell);
+    const hit = S.chart[cell] === 1;
+    td.textContent = hit ? "H" : "S";
+    td.className = (hit ? "h" : "s") + (cell === now ? " now" : "") +
+      (mark && S.chart[cell] !== BJ.CHARTS.basic.chart[cell] ? " diff" : "");
+  });
+  $("chart-name").textContent = S.chartName;
+  const n = differences();
+  $("differ").textContent = n === 0 ? "The same as basic strategy."
+    : `${n} cell${n > 1 ? "s" : ""} differ${n > 1 ? "" : "s"} from basic strategy.`;
+}
+
+// ------------------------------------------------------------ the game
+
+function deal() {
+  if (S.phase === "dealer") return;
+  if (S.practice) {
+    const { soft, total } = BJ.ROWS[BJ.HAND_NAMES.indexOf(S.practice.hand)];
+    S.player = BJ.dealHand(random, soft, total);
+    S.dealer = [BJ.cardShowing(random, S.practice.up), BJ.randomCard(random)];
+  } else {
+    S.player = [BJ.randomCard(random), BJ.randomCard(random)];
+    S.dealer = [BJ.randomCard(random), BJ.randomCard(random)];
+  }
+  S.shown = { dealer: 0, player: 0, hole: false };
+  S.lines = [];
+  S.firstChoice = null;
+  S.phase = "player";
+  const cell = BJ.cellOf(S.player, S.dealer[0]);
+  S.startCell = BJ.isNatural(S.player) ? null : cell;
+  if (BJ.isNatural(S.player)) finish();
+  else render();
+}
+
+function coach(choice) {
+  const says = BJ.advice(S.chart, S.player, S.dealer[0]);
+  S.choices++;
+  if (choice === says) S.matched++;
+  if (S.firstChoice === null) S.firstChoice = choice;
+  if (!S.coach) return;
+  const hand = `${BJ.describe(S.player)} ${BJ.against(S.dealer[0])}`;
+  const past = choice === "hit" ? "hit" : "stood";
+  if (choice === says) say(`✓ You ${past}, as ${S.chartName} says on ${hand}.`, "good");
+  else say(`✗ You ${past}. ${S.chartName} says ${says} on ${hand}.`, "bad");
+}
+
+function say(text, cls) {
+  S.lines.push({ text, cls });
+}
+
+function hit() {
+  if (S.phase !== "player") return;
+  coach("hit");
+  S.player.push(BJ.randomCard(random));
+  const total = BJ.handValue(S.player).total;
+  if (total > 21) finish();
+  else if (total === 21) {
+    say("21: you stand.", "dim");
+    dealerTurn();
+  } else render();
+}
+
+function stand() {
+  if (S.phase !== "player") return;
+  coach("stand");
+  dealerTurn();
+}
+
+function hint() {
+  if (S.phase !== "player") return;
+  const says = BJ.advice(S.chart, S.player, S.dealer[0]);
+  say(`Hint: ${S.chartName} says ${says} on ${BJ.describe(S.player)} ${BJ.against(S.dealer[0])}.`, "good");
+  render();
+}
+
+function dealerTurn() {
+  S.phase = "dealer";
+  render();
+  setTimeout(dealerStep, DEALER_PAUSE);
+}
+
+function dealerStep() {
+  if (BJ.dealerHits(S.dealer) && !BJ.isNatural(S.dealer)) {
+    S.dealer.push(BJ.randomCard(random));
+    render();
+    setTimeout(dealerStep, DEALER_PAUSE);
+  } else finish();
+}
+
+function finish() {
+  S.phase = "over";
+  const r = BJ.result(S.player, S.dealer);
+  S.hands++;
+  S.money += r;
+  if (r > 0) S.won++;
+  else if (r < 0) S.lost++;
+  else S.pushed++;
+  if (S.startCell !== null && S.startCell >= 0 && S.firstChoice) {
+    const t = (S.tally[S.startCell] ||= { hit: [0, 0], stand: [0, 0] });
+    t[S.firstChoice][0]++;
+    t[S.firstChoice][1] += r;
+  }
+  const p = S.player, d = S.dealer;
+  let text;
+  if (BJ.isNatural(p)) text = BJ.isNatural(d) ? "Both have blackjack: a push." : "Blackjack! You win $1.50.";
+  else if (BJ.handValue(p).total > 21) text = "You bust. You lose $1.";
+  else if (BJ.isNatural(d)) text = "The dealer has blackjack, which beats every other hand. You lose $1.";
+  else if (BJ.handValue(d).total > 21) text = "The dealer busts. You win $1.";
+  else if (r > 0) text = "You're closer to 21. You win $1.";
+  else if (r < 0) text = "The dealer is closer to 21. You lose $1.";
+  else text = "A tie: a push, and your bet comes back.";
+  say(text, "outcome " + (r > 0 ? "win" : r < 0 ? "lose" : ""));
+  render();
+}
+
+// ------------------------------------------------------------ the screen
+
+function money(x) {
+  return `${x < 0 ? "−" : "+"}$${Math.abs(x).toFixed(2)}`;
+}
+
+function perHand(sum, n) {
+  const v = sum / n;
+  return `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}`;
+}
+
+function render() {
+  const hide = S.phase === "player";
+  drawHand($("dealer-cards"), S.dealer, "dealer", hide);
+  drawHand($("player-cards"), S.player, "player", false);
+
+  const dv = BJ.handValue(S.dealer);
+  $("dealer-total").textContent = !S.dealer.length ? ""
+    : hide ? `shows ${BJ.upName(S.dealer[0])}`
+    : dv.total > 21 ? `busts with ${dv.total}` : `has ${BJ.describe(S.dealer)}`;
+  $("player-total").innerHTML = !S.player.length ? "" : BJ.describe(S.player) +
+    (S.phase === "player" ? ` <span class="note">hit or stand?</span>` : "");
+
+  $("hit").disabled = $("stand").disabled = $("hint").disabled = S.phase !== "player";
+  $("next").disabled = S.phase === "dealer";
+
+  $("messages").innerHTML = S.lines.slice(-3)
+    .map((l) => `<div class="${l.cls}">${l.text}</div>`).join("");
+
+  let stats = `Hands ${S.hands} · won ${S.won} · lost ${S.lost} · pushed ${S.pushed} · total ${money(S.money)}`;
+  if (S.hands) stats += ` (${perHand(S.money, S.hands)} per hand)`;
+  stats += `<div class="match">Matched ${S.chartName} on ${S.matched} of ${S.choices} choices</div>`;
+  $("stats").innerHTML = stats;
+
+  document.querySelectorAll("#practice .chip").forEach((b) => {
+    b.classList.toggle("active", b.dataset.key === (S.practice ? S.practice.key : "any"));
+  });
+
+  renderChart();
+  renderCell();
+}
+
+function renderCell() {
+  const cell = S.startCell;
+  const can = cell !== null && cell >= 0;
+  $("simulate").disabled = !can || S.busy;
+  if (cell === null) {
+    $("cell-name").textContent = S.player.length ? "blackjack" : "";
+    $("tally").textContent = "Blackjack: there is no choice to make.";
+    return;
+  }
+  if (cell < 0) {
+    $("cell-name").textContent = "two aces";
+    $("tally").textContent = "Two aces, soft 12, has no row in the chart: always hit.";
+    return;
+  }
+  $("cell-name").textContent = describeCell(cell);
+  const t = S.tally[cell];
+  const part = (k, verb) => {
+    const [n, sum] = t[k];
+    return n ? `${verb} ${n} time${n > 1 ? "s" : ""}, <b>${perHand(sum, n)}</b> per hand` : `${verb} 0 times`;
+  };
+  $("tally").innerHTML = t
+    ? `From this hand you have ${part("hit", "hit")}, and ${part("stand", "stood")}.`
+    : "You haven't finished a hand from here yet. Play a few, then simulate many.";
+}
+
+// ------------------------------------------------------------ simulations
+
+function seed() {
+  const v = Math.floor(Number($("seed").value));
+  return Number.isFinite(v) && v >= 0 ? v : 56430;
+}
+
+function signed(x) {
+  return (x < 0 ? "-" : "+") + Math.abs(x).toFixed(4);
+}
+
+const pause = () => new Promise((r) => setTimeout(r, 0));
+
+// Run fn(from, count) over n hands in pieces, so the page keeps drawing.
+async function inPieces(n, piece, fn, bar, offset = 0, scale = 1) {
+  for (let done = 0; done < n; done += piece) {
+    fn(done, Math.min(piece, n - done));
+    bar.value = offset + scale * Math.min(done + piece, n) / n;
+    await pause();
+  }
+}
+
+async function simulate() {
+  const cell = S.startCell;
+  if (cell === null || cell < 0 || S.busy) return;
+  S.busy = true;
+  render();
+  const n = Number($("cell-hands").value);
+  const chart = Uint8Array.from(S.chart);
+  const name = S.chartName;
+  const bar = $("cell-progress");
+  bar.hidden = false;
+  const res = {};
+  for (const [i, action] of ["stand", "hit"].entries()) {
+    const acc = BJ.newAcc();
+    await inPieces(n, 200000, (from, count) => BJ.cellChunk(chart, cell, action, seed(), from, count, acc),
+      bar, i / 2, 1 / 2);
+    res[action] = BJ.meanSe(acc.n, acc.sum, acc.sumsq);
+  }
+  bar.hidden = true;
+  const gap = res.hit.mean - res.stand.mean;
+  const twoSe = 2 * Math.hypot(res.hit.se, res.stand.se);
+  const verdict = Math.abs(gap) < twoSe ? "too close to call" : (gap > 0 ? "hit" : "stand") + " is better";
+  const hand = BJ.HAND_NAMES[Math.floor(cell / 10)];
+  const file = name.endsWith(".csv") ? name : "my-chart.csv";
+  $("cell-out").innerHTML =
+    `${hand} vs ${BJ.UP_NAMES[cell % 10]}, ${n.toLocaleString("en-US")} hands each (after a hit, follow ${name})\n` +
+    `  stand ${signed(res.stand.mean)} ± ${res.stand.se.toFixed(4)}\n` +
+    `  hit   ${signed(res.hit.mean)} ± ${res.hit.se.toFixed(4)}\n` +
+    `  hit minus stand ${signed(gap)}, twice its ± ${twoSe.toFixed(4)}: ${verdict}` +
+    `<span class="cmd">The same check on Midway3:\nuv run python blackjack.py cell ${cellArgs(cell)} --hands ${n} --table ${file}</span>`;
+  S.busy = false;
+  render();
+}
+
+async function score() {
+  if (S.busy) return;
+  S.busy = true;
+  $("score").disabled = true;
+  render();
+  const n = Number($("score-hands").value);
+  const chart = Uint8Array.from(S.chart);
+  const name = S.chartName;
+  const k = differences();          // counted now: the chart may change while this runs
+  const same = k === 0;
+  const acc = BJ.newAcc();
+  const bar = $("score-progress");
+  bar.hidden = false;
+  await inPieces(n, 250000, (from, count) =>
+    BJ.scoreChunk(chart, same ? null : BJ.CHARTS.basic.chart, seed(), from, count, acc), bar);
+  bar.hidden = true;
+  const r = BJ.meanSe(acc.n, acc.sum, acc.sumsq);
+  const cents = (Math.abs(r.mean) * 100).toFixed(1);
+  const label = (s) => s.padEnd(22);
+  let out = `${n.toLocaleString("en-US")} hands, a $1 bet on each (seed ${seed()})\n` +
+    `  ${label(name)}${signed(r.mean)} ± ${r.se.toFixed(4)} per hand: ${r.mean < 0 ? "loses" : "wins"} ${cents} cents per $1`;
+  let short = `${name}: ${signed(r.mean)} ± ${r.se.toFixed(4)} per hand`;
+  if (!same) {
+    const basicMean = (acc.sum - acc.dsum) / acc.n;   // each hand's chart - basic, summed
+    const d = BJ.meanSe(acc.n, acc.dsum, acc.dsumsq);
+    const verdict = Math.abs(d.mean) < 2 * d.se ? "too close to call"
+      : d.mean > 0 ? `${name} is better` : "basic strategy is better";
+    out += `\n  ${label("basic-strategy.csv")}${signed(basicMean)} on the same cards` +
+      `\n  ${label("difference")}${signed(d.mean)} ± ${d.se.toFixed(4)}: ${verdict}`;
+    short += `, ${signed(d.mean)} ± ${d.se.toFixed(4)} against basic strategy`;
+  } else {
+    out += "\n  (this is basic strategy)";
+  }
+  $("score-out").textContent = out;
+  const li = document.createElement("li");
+  li.textContent = `${short} (${n.toLocaleString("en-US")} hands; ${k} cell${k === 1 ? "" : "s"} differ${k === 1 ? "s" : ""} from basic strategy)`;
+  $("history").prepend(li);
+  while ($("history").children.length > 6) $("history").lastChild.remove();
+  S.busy = false;
+  $("score").disabled = false;
+  render();
+}
+
+// ------------------------------------------------------------ loading charts
+
+function useText(text, name) {
+  const chart = BJ.parseChart(text);
+  setChart(chart, name);
+}
+
+function download() {
+  const name = S.chartName.endsWith(".csv") ? S.chartName : "my-chart.csv";
+  const url = URL.createObjectURL(new Blob([BJ.chartToCsv(S.chart)], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ------------------------------------------------------------ wiring
+
+function setup() {
+  const box = $("practice");
+  const chips = [{ key: "any", label: "Any hand" }, ...PRACTICE.map((p, i) => ({ ...p, key: "p" + i }))];
+  for (const c of chips) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.dataset.key = c.key;
+    b.textContent = c.label;
+    b.addEventListener("click", () => {
+      if (S.phase === "dealer") return;
+      S.practice = c.key === "any" ? null : c;
+      deal();
+    });
+    box.appendChild(b);
+  }
+  const hand = document.createElement("select");
+  hand.id = "pick-hand";
+  hand.setAttribute("aria-label", "your hand");
+  for (const h of BJ.PRACTICE_HANDS) {
+    const o = document.createElement("option");
+    o.value = h;
+    o.textContent = (h[0] === "S" ? "Soft " : "Hard ") + h.slice(1);
+    if (h === "H16") o.selected = true;
+    hand.appendChild(o);
+  }
+  const up = document.createElement("select");
+  up.id = "pick-up";
+  up.setAttribute("aria-label", "dealer shows");
+  for (const u of BJ.UP_NAMES) {
+    const o = document.createElement("option");
+    o.value = u;
+    o.textContent = u;
+    if (u === "10") o.selected = true;
+    up.appendChild(o);
+  }
+  const go = document.createElement("button");
+  go.className = "chip";
+  go.dataset.key = "pick";
+  go.textContent = "Deal this";
+  go.addEventListener("click", () => {
+    if (S.phase === "dealer") return;
+    const name = hand.options[hand.selectedIndex].textContent;
+    S.practice = { key: "pick", hand: hand.value, up: up.value, label: `${name} vs ${up.value}` };
+    deal();
+  });
+  const vs = document.createElement("span");
+  vs.textContent = "vs";
+  box.append(hand, vs, up, go);
+
+  buildGrid($("grid-hard"), [...Array(18).keys()]);
+  buildGrid($("grid-soft"), [...Array(9).keys()].map((i) => i + 18));
+  document.querySelectorAll("table.chart td").forEach((td) =>
+    td.addEventListener("click", () => toggleCell(Number(td.dataset.cell))));
+  $("mark-diff").addEventListener("change", renderChart);
+
+  $("hit").addEventListener("click", hit);
+  $("stand").addEventListener("click", stand);
+  $("hint").addEventListener("click", hint);
+  $("next").addEventListener("click", deal);
+  $("coach").addEventListener("change", (e) => { S.coach = e.target.checked; });
+  $("simulate").addEventListener("click", simulate);
+  $("score").addEventListener("click", score);
+
+  $("load-basic").addEventListener("click", () => setChart(BJ.CHARTS.basic.chart, BJ.CHARTS.basic.name));
+  $("load-start").addEventListener("click", () => setChart(BJ.CHARTS.start.chart, BJ.CHARTS.start.name));
+  $("download").addEventListener("click", download);
+  $("load-file").addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      useText(await f.text(), f.name);
+    } catch (err) {
+      alert(`${f.name}: ${err.message}`);
+    }
+    e.target.value = "";
+  });
+  const dialog = $("paste-dialog");
+  $("load-paste").addEventListener("click", () => {
+    $("paste-error").textContent = "";
+    dialog.showModal();
+    $("paste-text").focus();
+  });
+  $("paste-cancel").addEventListener("click", () => dialog.close());
+  $("paste-use").addEventListener("click", () => {
+    try {
+      useText($("paste-text").value, "pasted chart");
+      dialog.close();
+    } catch (err) {
+      $("paste-error").textContent = err.message;
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || dialog.open) return;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+    const k = e.key.toLowerCase();
+    if (k === "h") hit();
+    else if (k === "s") stand();
+    else if (k === "?") hint();
+    else if (k === "n" || (k === "enter" && e.target === document.body)) deal();
+    else if (k === "c") {
+      $("coach").checked = !$("coach").checked;
+      S.coach = $("coach").checked;
+    } else return;
+    e.preventDefault();
+  });
+
+  deal();
+}
+
+setup();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 """Hello, MPI. Every rank runs this same program.
 
-    mpiexec -n 4 python hello_mpi.py
+    mpiexec -n 4 python mpi/hello_mpi.py
 """
 
 import socket

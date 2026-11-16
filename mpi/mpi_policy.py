@@ -11,12 +11,10 @@ each round:
 
 The job stops when a round changes nothing. Run it with mpiexec:
 
-    mpiexec -n 4 python mpi_policy.py --hands 400000
+    mpiexec -n 4 python mpi/mpi_policy.py
 """
 
 import argparse
-import csv
-import socket
 from pathlib import Path
 
 from mpi4py import MPI
@@ -30,7 +28,7 @@ size = comm.Get_size()
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hands", type=int, default=400_000, help="hands per action")
+    ap.add_argument("--hands", type=int, default=2_000_000, help="hands per action")
     ap.add_argument("--table", type=Path, default=None,
                     help="starting table (default: table-round-1.csv)")
     ap.add_argument("--max-rounds", type=int, default=10)
@@ -61,18 +59,13 @@ def main():
 
     elapsed = MPI.Wtime() - start
     if rank == 0:
-        print(f"\n{size} ranks, {rnd} rounds, {a.hands:,} hands per action: "
-              f"{elapsed:.1f} s\n")
+        ranks = f"{size} rank" + ("s" if size > 1 else "")
+        print(f"\n{ranks}, {rnd} rounds, {a.hands:,} hands per action: {elapsed:.1f} s\n")
         bj.show(table)
         if a.out:
             bj.write_table(table, a.out)
         if a.times:
-            new = not a.times.exists()
-            with open(a.times, "a", newline="") as f:
-                w = csv.writer(f)
-                if new:
-                    w.writerow(["ranks", "seconds", "rounds", "hands", "node"])
-                w.writerow([size, f"{elapsed:.2f}", rnd, a.hands, socket.gethostname()])
+            bj.record_time(a.times, "mpi", size, elapsed, rnd, a.hands)
 
 
 if __name__ == "__main__":

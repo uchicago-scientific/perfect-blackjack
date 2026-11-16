@@ -1,9 +1,10 @@
-"""Speedup of the MPI runs, from the times every job appended.
+"""Speedup of the MPI and multiprocessing runs, from the times every job appended.
 
     python speedup.py
 
-Reads LAB/mpi-times.csv, keeps the fastest run at each rank count, and
-prints and plots speedup S = T1 / TN and efficiency E = S / N.
+Reads LAB/times.csv, keeps the fastest run for each method and number of
+workers (MPI ranks or pool workers), and prints and plots speedup
+S = T1 / TN and efficiency E = S / N for each method.
 """
 
 import argparse
@@ -17,43 +18,49 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 import blackjack as bj  # noqa: E402
 
-PURPLE, GOLD = "#711E7C", "#ECA414"
+COLOURS = {"mpi": "#711E7C", "multiprocessing": "#ECA414"}
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--times", type=Path, default=bj.LAB / "mpi-times.csv")
+    ap.add_argument("--times", type=Path, default=bj.LAB / "times.csv")
     ap.add_argument("--out", type=Path, default=bj.LAB / "speedup.png")
     a = ap.parse_args()
 
-    best = {}
+    best = {}                                   # method -> {workers: fastest seconds}
     with open(a.times) as f:
         for r in csv.DictReader(f):
-            n, t = int(r["ranks"]), float(r["seconds"])
-            best[n] = min(t, best.get(n, t))
-    ranks = sorted(best)
-    if 1 not in best:
-        print("no 1-rank run yet: speedup needs T1")
-        return
-    t1 = best[1]
-    print(f"{'ranks':>5} {'seconds':>8} {'speedup':>8} {'efficiency':>10}")
-    for n in ranks:
-        s = t1 / best[n]
-        print(f"{n:5d} {best[n]:8.1f} {s:8.1f} {s / n:10.0%}")
+            n, t = int(r["workers"]), float(r["seconds"])
+            runs = best.setdefault(r["method"], {})
+            runs[n] = min(t, runs.get(n, t))
 
     fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.2))
-    left.plot(ranks, [best[n] for n in ranks], "o-", color=PURPLE, lw=2)
-    left.set_xscale("log", base=2)
-    left.set_yscale("log")
-    left.set_xlabel("MPI ranks")
+    print(f"{'method':16s} {'workers':>7} {'seconds':>8} {'speedup':>8} {'efficiency':>10}")
+    for method in sorted(best):
+        runs = best[method]
+        ns = sorted(runs)
+        left.plot(ns, [runs[n] for n in ns], "o-", color=COLOURS.get(method), lw=2,
+                  label=method)
+        if 1 not in runs:
+            print(f"{method:16s} no 1-worker run yet: speedup needs T1")
+            continue
+        for n in ns:
+            s = runs[1] / runs[n]
+            print(f"{method:16s} {n:7d} {runs[n]:8.1f} {s:8.1f} {s / n:10.0%}")
+        right.plot(ns, [runs[1] / runs[n] for n in ns], "o-", color=COLOURS.get(method),
+                   lw=2, label=method)
+    counts = sorted({n for runs in best.values() for n in runs})
+    right.plot(counts, counts, "--", color="#999999", label="ideal: S = N")
+
+    left.set_ylim(bottom=0)
     left.set_ylabel("Seconds, all rounds")
-    right.plot(ranks, ranks, "--", color="#999999", label="ideal: S = N")
-    right.plot(ranks, [t1 / best[n] for n in ranks], "o-", color=GOLD, lw=2,
-               label="measured")
-    right.set_xlabel("MPI ranks")
     right.set_ylabel("Speedup  T1 / TN")
-    right.legend()
     for ax in (left, right):
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(counts, [str(n) for n in counts])
+        ax.minorticks_off()
+        ax.set_xlabel("Workers (MPI ranks or pool workers)")
+        ax.legend()
         ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(a.out, dpi=150)

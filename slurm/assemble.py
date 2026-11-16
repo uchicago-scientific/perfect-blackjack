@@ -11,7 +11,7 @@ better action, and writes:
 Rows still missing are listed, so they can be run again. It can be run while
 a round is still coming in: missing cells show as dots.
 
-    python assemble.py --round 1
+    python slurm/assemble.py --round 1
 """
 
 import argparse
@@ -123,7 +123,7 @@ def main():
     if missing:
         rows = ranges(missing)
         print(f"missing rows {rows}: rerun with  sbatch --array={rows} "
-              f"--export=ALL,ROUND={a.round} array_round.sbatch")
+              f"--export=ALL,ROUND={a.round} slurm/array_round.sbatch")
         sys.exit(1)              # a failed step, so a job chain stops here
     bj.write_table(new, a.lab / f"table-round-{a.round + 1}.csv")
     print(f"wrote {a.lab / f'table-round-{a.round + 1}.csv'}")

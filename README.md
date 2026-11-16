@@ -1,116 +1,16 @@
 # Perfect Blackjack
 
-Work out how to play every hand of blackjack by simulation, and run the same
-calculation two ways on a cluster: as a Slurm **job array**, and as one
-**MPI** job. This is the in-class lab for Module 8 of MPCS 56430,
-Introduction to Scientific Computing, at the University of Chicago. It runs
-on the Research Computing Center's Midway3 cluster, and on a laptop.
+Work out the best way to play every hand of blackjack by simulation, then run
+the same calculation three ways and time them: as a **Slurm job array**, as
+one **MPI** job, and as one Python program with a **multiprocessing** pool.
+This is the in-class lab for Module 8 of MPCS 56430, Introduction to
+Scientific Computing, at the University of Chicago. It runs on the Research
+Computing Center's Midway3 cluster, and on a laptop.
 
-The code is written. You run it, look at what it prints, and compare the two
-ways of running it.
+The code is written: you run it and compare. The rules, Monte Carlo and
+policy iteration are explained in [BACKGROUND.md](BACKGROUND.md).
 
-## Contents
-
-- [The problem](#the-problem)
-- [Setup](#setup)
-- [The shared folder](#the-shared-folder)
-- [Files](#files)
-- [The scripts, with examples](#the-scripts-with-examples)
-- [The lab on Midway3, step by step](#the-lab-on-midway3-step-by-step)
-- [Common errors](#common-errors)
-
-## The problem
-
-### The rules
-
-A simplified blackjack:
-
-- Cards 2 to 9 count their number, 10, J, Q and K count 10, and an ace counts
-  11 or 1. Every card is drawn with replacement (an infinite deck), so the
-  chances never change
-- You and the dealer each get two cards. You see one of the dealer's cards,
-  the **upcard**
-- You play first. You **hit** (take a card) or **stand** (stop), as often as
-  you like. Go over 21 and you **bust**: you lose at once
-- Then the dealer plays by a fixed rule: hit on 16 or less, stand on 17 or
-  more, including soft 17 (an ace and a 6)
-- Closer to 21 wins. A tie is a push: your bet comes back
-- Blackjack (21 in your first two cards) pays 3 to 2. A dealer blackjack
-  beats every other hand
-- Only hit or stand: no doubling, splitting, surrender or insurance
-
-A hand is **soft** when it holds an ace counted as 11, so one more card can't
-bust it. Every other hand is **hard**.
-
-### The strategy table
-
-The answer is a table that says H or S for every hand you might hold against
-every dealer upcard:
-
-- 27 rows, one per hand: hard 4 to 21 (rows 0 to 17), then soft 13 to 21
-  (rows 18 to 26). Two aces, soft 12, is always a hit and has no row
-- 10 columns, one per dealer upcard: 2 to 10, and ace
-- 270 cells, numbered row by row: cell 0 is hard 4 against a 2, cell 10 is
-  hard 5 against a 2, cell 269 is soft 21 against an ace
-
-Tables are stored as CSV files, one row per hand. This is the start of
-`table-round-1.csv`:
-
-```
-hand,2,3,4,5,6,7,8,9,10,A
-H4,H,H,H,H,H,H,H,H,H,H
-H5,H,H,H,H,H,H,H,H,H,H
-```
-
-### Monte Carlo
-
-To fill in one cell, play that hand many times each way, with random cards,
-and score each result as a $1 bet: +1 for a win, 0 for a push, −1 for a
-loss. The average score is the choice's **expected value**: what it wins or
-loses per hand in the long run. The standard error, printed as ±, says how
-much that average would change if you ran it again. It shrinks with the
-square root of the number of hands. Trust that one choice beats the other
-only when the gap between them is bigger than about twice its ±.
-
-### Policy iteration
-
-After a hit you have to choose again, and the simulation makes that choice
-by looking it up in the table. So scoring the table needs a table. The lab
-starts from a guess and improves it:
-
-1. **Start:** `table-round-1.csv` copies the dealer's rule: H on 16 or less,
-   S on 17 or more, against every upcard
-2. **Score** hit and stand in all 270 cells, following the current table after
-   a hit
-3. **Switch** each cell to whichever choice scored better. A cell whose letter
-   changes has **flipped**. The result is the next table
-4. **Repeat** until a round flips nothing
-
-At 400,000 hands per action, 41 cells flip in round 1, 5 in round 2 and none
-in round 3. The final table matches the exact answer for these rules,
-computed separately.
-
-Within a round the 270 cells don't depend on each other, so they can run at
-the same time on different CPUs. The next round has to wait for all of them.
-That is what the two ways of running it handle differently:
-
-| | Job array and job chain | One MPI job |
-|---|---|---|
-| Who runs a round | 27 independent array tasks, one per row | N ranks of one program, each taking every Nth cell |
-| How results come together | Files in the shared folder, then a separate assemble job | `gather` to rank 0, which updates the table and `bcast`s it back |
-| Between rounds | A new job, which waits in the queue | Nothing: the next round starts at once |
-
-### Reproducibility
-
-Each cell's random numbers depend only on the cell (seed 56430), not on the
-round or on which task or rank runs it. The same table and number of hands
-give the same results however the work is split: 27 array tasks, 1 MPI rank
-or 48. It also means a round that flips nothing leaves the table exactly as
-it was, so the rounds stop.
-
-## Setup
-
-### On Midway3
+## Setup on Midway3
 
 On a login node (compute nodes have no internet access, so this has to run
 here):
@@ -122,15 +22,146 @@ uv sync --locked
 mkdir -p logs
 ```
 
-`uv sync --locked` installs Python 3.13 and the packages in `uv.lock`: NumPy,
-Matplotlib, `mpi4py` and the `mpich` MPI library. The batch scripts run with
-`uv run --offline`, which uses that environment and never downloads. Slurm
-writes each job's output to `logs/`, and does not create that folder itself.
+Run every command below from `~/blackjack`. Slurm writes each job's output to
+`logs/`, and does not create that folder itself. If `uv` is not installed:
+`curl -LsSf https://astral.sh/uv/install.sh | sh`, then sign out and back in.
 
-If `uv` is not installed: `curl -LsSf https://astral.sh/uv/install.sh | sh`,
-then sign out and back in.
+The example outputs in these READMEs come from a laptop, with the shared
+folder shown as Midway3's. On Midway3 the cells, flips and tables are the
+same; the times differ.
 
-### On a laptop
+## Run it
+
+### Score one cell
+
+```
+uv run python blackjack.py cell --hand H13 --up 2 --hands 100000
+```
+
+### 1. Slurm job array: [`slurm/`](slurm/)
+
+Each round is 27 independent tasks, one per row. Their results meet in files,
+and a separate job writes the next table.
+
+```
+sbatch --array=4-5 --export=ALL,ROUND=1 slurm/array_round.sbatch   # rows 4 and 5 of round 1
+uv run python slurm/assemble.py --round 1                          # instructor: the next table
+bash slurm/chain.sh 2 4                                            # instructor: rounds 2 to 4
+```
+
+### 2. MPI: [`mpi/`](mpi/)
+
+One job runs every round. N copies of one program, the ranks, pass the table
+and the results to each other as messages.
+
+```
+uv run mpiexec -n 4 python mpi/hello_mpi.py     # hello, on the login node
+sbatch --ntasks=8 mpi/mpi.sbatch                # every round, 8 ranks
+```
+
+### 3. multiprocessing: [`multiprocessing/`](multiprocessing/)
+
+One job runs every round. One Python program starts N worker processes on one
+node and hands them their cells with `pool.map`.
+
+```
+sbatch --cpus-per-task=8 multiprocessing/pool.sbatch    # every round, 8 workers
+```
+
+### Compare
+
+Each MPI and multiprocessing job appends its time to `times.csv` in the shared
+folder. In class, everyone runs both with the same number of workers:
+
+| Your number | Workers | Commands |
+|---|---|---|
+| 1 or 8 | 1 | `sbatch --ntasks=1 mpi/mpi.sbatch` and `sbatch --cpus-per-task=1 multiprocessing/pool.sbatch` |
+| 2 or 9 | 2 | `sbatch --ntasks=2 mpi/mpi.sbatch` and `sbatch --cpus-per-task=2 multiprocessing/pool.sbatch` |
+| 3 or 10 | 4 | `sbatch --ntasks=4 mpi/mpi.sbatch` and `sbatch --cpus-per-task=4 multiprocessing/pool.sbatch` |
+| 4 or 11 | 8 | `sbatch --ntasks=8 mpi/mpi.sbatch` and `sbatch --cpus-per-task=8 multiprocessing/pool.sbatch` |
+| 5 or 12 | 16 | `sbatch --ntasks=16 mpi/mpi.sbatch` and `sbatch --cpus-per-task=16 multiprocessing/pool.sbatch` |
+| 6 or 13 | 32 | `sbatch --ntasks=32 mpi/mpi.sbatch` and `sbatch --cpus-per-task=32 multiprocessing/pool.sbatch` |
+| 7 or 14 | 48 | `sbatch --ntasks=48 mpi/mpi.sbatch` and `sbatch --cpus-per-task=48 multiprocessing/pool.sbatch` |
+
+Then the instructor computes the speedup of each:
+
+```
+uv run python speedup.py
+```
+
+```
+$ uv run python speedup.py
+method           workers  seconds  speedup efficiency
+mpi                    1    254.7      1.0       100%
+mpi                    2    144.4      1.8        88%
+mpi                    4     97.8      2.6        65%
+mpi                    8    102.8      2.5        31%
+multiprocessing        1    249.7      1.0       100%
+multiprocessing        2    137.6      1.8        91%
+multiprocessing        4    106.6      2.3        59%
+multiprocessing        8     98.5      2.5        32%
+wrote /project/mpcs56430/2026-autumn/blackjack/speedup.png
+```
+
+It keeps the fastest run for each method and number of workers, and draws
+`speedup.png`. **Speedup** S = T1 / TN is how many times faster than 1 worker;
+**efficiency** E = S / N, where 100% is perfect. These numbers are from a
+laptop with 4 fast cores and 4 slow ones, which is why 8 workers gain little
+or nothing over 4; a Midway3 caslake node has 48 cores of one kind.
+
+## Play
+
+A web page deals blackjack by the lab's rules:
+**<https://uchicago-scientific.github.io/perfect-blackjack/>**. To use it
+offline, open `docs/index.html` from your copy of this repository in a
+browser.
+
+- **Coach:** after every choice, says whether the strategy chart agrees. The
+  chart starts as basic strategy, the correct one
+- **Deal:** buttons deal the four hands from the opening vote, or a hand you
+  pick, every time until you choose another
+- **Chart:** click a cell to switch it between H and S, or load the starting
+  guess, a CSV file, or a table pasted from Midway3. **Download CSV** saves it
+- **Simulate:** plays hit and stand from the current hand as many times as
+  you choose, the same calculation as `blackjack.py cell`
+- **Score:** plays whole hands by the chart, and by basic strategy on the
+  same cards, so even a change to one cell shows
+
+Keys: `h` hit, `s` stand, `n` next hand, `?` hint, `c` coach on or off.
+
+To score charts from the command line, `blackjack.py score` plays a million
+whole hands by each:
+
+```
+$ uv run python blackjack.py score table-round-1.csv basic-strategy.csv
+1,000,000 hands each, a $1 bet on every hand
+  table-round-1.csv        -0.0571 ± 0.0010 per hand: loses 5.7 cents per $1
+  basic-strategy.csv       -0.0246 ± 0.0010 per hand: loses 2.5 cents per $1
+```
+
+Basic strategy's exact loss is 2.42 cents per $1, within the ± above. To score
+your own chart, copy a table, change any H or S, and score it beside basic
+strategy:
+
+```
+cp table-round-1.csv my-chart.csv
+nano my-chart.csv
+uv run python blackjack.py score my-chart.csv basic-strategy.csv
+```
+
+## The three ways
+
+| | Slurm job array | MPI | multiprocessing |
+|---|---|---|---|
+| Jobs | 27 tasks and an assemble job, each round | One job, every round | One job, every round |
+| Queue | Before every round | Once | Once |
+| Results come together by | Files in the shared folder | Messages to rank 0 | `pool.map` returning them to the main process |
+| Nodes | Any number | One or many | One |
+| Started by | `sbatch --array` | `mpiexec -n N` | `Pool(N)` in the program |
+
+[BACKGROUND.md](BACKGROUND.md#why-three-ways-to-run-it) says more.
+
+## On a laptop
 
 macOS, Linux or WSL. There is no Slurm, so run the commands inside the
 `.sbatch` files directly:
@@ -142,9 +173,15 @@ uv sync --locked
 export BLACKJACK_LAB=$PWD/shared
 mkdir -p $BLACKJACK_LAB
 cp table-round-1.csv $BLACKJACK_LAB/
+
+for row in $(seq 0 26); do uv run python slurm/row.py --row $row --round 1; done
+uv run python slurm/assemble.py --round 1
+uv run mpiexec -n 4 python mpi/mpi_policy.py --times $BLACKJACK_LAB/times.csv
+uv run python multiprocessing/pool_policy.py --workers 4 --times $BLACKJACK_LAB/times.csv
+uv run python speedup.py
 ```
 
-## The shared folder
+## Where results go
 
 Every script reads and writes one shared folder:
 `/project/mpcs56430/2026-autumn/blackjack` on Midway3, or whatever folder the
@@ -153,257 +190,41 @@ environment variable `BLACKJACK_LAB` names.
 | Path | Written by | Holds |
 |---|---|---|
 | `table-round-1.csv` | The instructor, before class | The starting table |
-| `round-N/row-NN.csv` | `blackjack.py row`, one per array task | Hit and stand for the 10 cells of row NN, in round N |
-| `table-round-N.csv`, N ≥ 2 | `assemble.py --round N-1` | The table round N follows |
-| `round-N.png` | `assemble.py --round N` | A heat map of round N |
-| `mpi-times.csv` | `mpi_policy.py --times` | One line per MPI run: ranks, seconds, rounds |
-| `speedup.png` | `speedup.py` | The class's speedup plot |
+| `round-N/row-NN.csv` | `slurm/row.py`, one per array task | Hit and stand for the 10 cells of row NN, in round N |
+| `table-round-N.csv`, N ≥ 2 | `slurm/assemble.py --round N-1` | The table round N follows |
+| `round-N.png` | `slurm/assemble.py --round N` | A heat map of round N |
+| `times.csv` | `mpi/mpi_policy.py` and `multiprocessing/pool_policy.py`, with `--times` | One line per run: method, workers, seconds, rounds, hands, node |
+| `speedup.png` | `speedup.py` | Time and speedup against workers, for each method |
 
 ## Files
 
-| File | What it is |
-|---|---|
-| `blackjack.py` | The game, the simulator and the table files. `cell` prints one cell; `row` writes one row of results for a round |
-| `table-round-1.csv` | The starting table |
-| `array_round.sbatch` | One round as a job array: one task per row |
-| `assemble.py` | Collects a round's rows, writes the next table and a heat map |
-| `assemble.sbatch` | Runs `assemble.py` as a job, for the chain |
-| `chain.sh` | Submits several rounds at once, each step waiting for the last with `--dependency=afterok` |
-| `hello_mpi.py`, `hello.sbatch` | The smallest MPI program, on the login node or as a job |
-| `mpi_policy.py` | Every round of policy iteration in one MPI program |
-| `mpi.sbatch` | Runs `mpi_policy.py` as a job with any number of ranks |
-| `speedup.py` | Speedup and efficiency from everyone's MPI times |
-| `pyproject.toml`, `uv.lock`, `.python-version` | The environment, for `uv sync --locked` |
-
-## The scripts, with examples
-
-The outputs below are from a laptop run. On Midway3 the cells, flips and
-values are the same; times differ. `<id>` and `<node>` stand for a job id
-and a host name.
-
-### `blackjack.py cell`: one cell, printed
-
 ```
-uv run python blackjack.py cell --hand H13 --up 2 --hands 1000
+blackjack.py          the game and the simulator, used by every script; scores a cell or a chart
+table-round-1.csv     the starting table: hit on 16 or less, as the dealer does
+basic-strategy.csv    the correct table for these rules, worked out exactly
+speedup.py            speedup and efficiency of each method, from times.csv
+slurm/                a round as a job array, and rounds as a job chain
+mpi/                  every round in one MPI job, and hello, MPI
+multiprocessing/      every round in one program with a pool of workers
+docs/                 the web page: play with a coach, edit a chart, simulate and score it
+BACKGROUND.md         the rules, Monte Carlo and policy iteration
+pyproject.toml, uv.lock, .python-version    the environment, for uv sync --locked
 ```
 
-```
-H13 vs 2, 1,000 hands each (after a hit, follow table-round-1.csv)
-  stand -0.2540 ± 0.0306
-  hit   -0.3350 ± 0.0288
-  hit minus stand -0.0810, twice its ± 0.0841: too close to call
-```
-
-With 100 times the hands, the ± is a tenth as big and the answer is clear:
-
-```
-uv run python blackjack.py cell --hand H13 --up 2 --hands 100000
-```
-
-```
-H13 vs 2, 100,000 hands each (after a hit, follow table-round-1.csv)
-  stand -0.2926 ± 0.0030
-  hit   -0.3365 ± 0.0029
-  hit minus stand -0.0439, twice its ± 0.0083: stand is better
-```
-
-| Option | Meaning |
-|---|---|
-| `--hand` | `H` or `S` and a total: `H13` is hard 13, `S17` is soft 17 |
-| `--up` | The dealer's upcard: `2` to `10`, or `A` |
-| `--hands` | Hands played for each action (default 100,000) |
-| `--table` | The table followed after a hit (default `table-round-1.csv`) |
-
-Keep `cell` runs on a login node short: a few seconds. To score a cell
-against a later table, pass it, for example
-`--table /project/mpcs56430/2026-autumn/blackjack/table-round-3.csv`.
-
-### `blackjack.py row`: one row of a round, written to a file
-
-What each array task runs:
-
-```
-uv run python blackjack.py row --row 12 --round 1
-```
-
-```
-round 1: wrote /project/mpcs56430/2026-autumn/blackjack/round-1/row-12.csv
-```
-
-It reads `table-round-1.csv`, simulates the 10 cells of row 12 (hard 16) at
-400,000 hands per action, and writes:
-
-```
-cell,hand,up,hands,stand,stand_se,hit,hit_se
-120,H16,2,400000,-0.290275,0.001513,-0.470492,0.001349
-121,H16,3,400000,-0.25385,0.001529,-0.463838,0.001357
-```
-
-`--hands`, `--table` and `--out` override the defaults.
-
-### `array_round.sbatch`: a round as a job array
-
-One array task per row, each running `blackjack.py row` with its task number
-as the row. The tasks are independent: none waits for or talks to another.
-
-```
-sbatch --export=ALL,ROUND=1 array_round.sbatch               # all 27 rows
-sbatch --array=4-5 --export=ALL,ROUND=1 array_round.sbatch   # rows 4 and 5
-squeue -u $USER                                              # PD waiting, R running
-cat logs/bj-array-<job id>_4.out                             # task 4's output
-```
-
-`--export=ALL,ROUND=1` passes `ROUND=1` to the script, along with your
-environment. `HANDS` can be passed the same way; the default is 400,000.
-
-### `assemble.py`: put a round together
-
-```
-uv run python assemble.py --round 1
-```
-
-```
-Round 1: 270 of 270 cells, 41 flipped, 1 too close to call
-wrote /project/mpcs56430/2026-autumn/blackjack/round-1.png
-wrote /project/mpcs56430/2026-autumn/blackjack/table-round-2.csv
-  flipped H5 vs 5: now stand
-  flipped H6 vs 4: now stand
-  ...
-```
-
-It reads every `row-NN.csv` for the round, switches each cell to the better
-action, and writes the next table and a heat map of the round (orange: hit is
-better, purple: stand is better; gold outline: flipped; hatched: too close to
-call). It can run while rows are still arriving. If rows are missing it
-writes the heat map with dots for the missing cells, prints the `sbatch` line
-that reruns them, and exits with status 1 without writing the next table:
-
-```
-Round 1: 10 of 270 cells, 5 flipped, 1 too close to call
-wrote /project/mpcs56430/2026-autumn/blackjack/round-1.png
-missing rows 0-11,13-26: rerun with  sbatch --array=0-11,13-26 --export=ALL,ROUND=1 array_round.sbatch
-```
-
-A cell that is too close to call still takes whichever action scored better.
-
-### `chain.sh`: several rounds as a job chain
-
-```
-bash chain.sh 2 4
-```
-
-```
-round 2: array job <id>, then assemble job <id>
-round 3: array job <id>, then assemble job <id>
-round 4: array job <id>, then assemble job <id>
-watch it with:  squeue -u $USER
-```
-
-It submits every step at once. Each step starts only when the one before it
-succeeds (`--dependency=afterok`), so `squeue` shows the waiting steps with
-the reason `(Dependency)`. If a step fails, the steps after it can never
-start and show `(DependencyNeverSatisfied)`; cancel them with `scancel`.
-`table-round-2.csv` must exist before `bash chain.sh 2 ...`.
-
-### `hello_mpi.py`: the smallest MPI program
-
-Every rank runs the same program; each knows its own number (its rank) and
-how many ranks there are.
-
-```
-uv run mpiexec -n 4 python hello_mpi.py      # login node: 4 ranks, a few seconds
-sbatch --ntasks=8 hello.sbatch               # a compute node: 8 ranks
-```
-
-```
-rank 0 of 4 on <node>
-rank 0 received the sum of every rank: 6
-rank 1 of 4 on <node>
-rank 2 of 4 on <node>
-rank 3 of 4 on <node>
-```
-
-The lines come out in a different order each run, because the ranks run at
-the same time. Only rank 0 prints the sum.
-
-### `mpi_policy.py` and `mpi.sbatch`: every round in one MPI job
-
-Each round, rank 0 broadcasts the table, every rank simulates its share of
-the cells (rank r takes cells r, r + N, r + 2N, ...), rank 0 gathers the
-results and updates the table, then tells every rank whether to stop.
-
-```
-sbatch --ntasks=16 mpi.sbatch                # 16 ranks on one node
-cat logs/bj-mpi-<job id>.out
-```
-
-On a laptop: `uv run mpiexec -n 4 python mpi_policy.py`.
-
-```
-round 1:  41 cells flipped (   5.4 s)
-round 2:   5 cells flipped (   5.2 s)
-round 3:   0 cells flipped (   5.2 s)
-
-4 ranks, 3 rounds, 400,000 hands per action: 15.8 s
-
-       2  3  4  5  6  7  8  9 10  A
-H4     H  H  H  H  H  H  H  H  H  H
-...
-```
-
-`mpi.sbatch` adds `--times`, which appends the run to `mpi-times.csv`. The
-time counts the rounds only, from when every rank has started.
-
-| Option | Meaning |
-|---|---|
-| `--hands` | Hands per action (default 400,000; `mpi.sbatch` takes `HANDS`) |
-| `--table` | The starting table (default `table-round-1.csv`) |
-| `--max-rounds` | Stop after this many rounds even if cells still flip (default 10) |
-| `--out` | Write the final table to this CSV |
-| `--times` | Append the run's time to this CSV |
-
-### `speedup.py`: the class's speedup
-
-```
-uv run python speedup.py
-```
-
-```
-ranks  seconds  speedup efficiency
-    1     49.1      1.0       100%
-    4     15.8      3.1        78%
-wrote /project/mpcs56430/2026-autumn/blackjack/speedup.png
-```
-
-It keeps the fastest run at each rank count. Speedup is S = T1 / TN, how many
-times faster than 1 rank; efficiency is E = S / N, where 100% is perfect.
-
-## The lab on Midway3, step by step
-
-1. **Set up** on a login node (see [Setup](#setup)), and try a cell with
-   `blackjack.py cell`
-2. **Round 1, as a job array.** The class splits the 27 rows: number k of 14
-   runs rows 2k − 2 and 2k − 1, and number 14 runs row 26. Number 3, for
-   example: `sbatch --array=4-5 --export=ALL,ROUND=1 array_round.sbatch`
-3. **Assemble round 1** (instructor): `uv run python assemble.py --round 1`
-4. **Rounds 2 to 4, as a chain** (instructor): `bash chain.sh 2 4`. Everyone
-   can watch with `squeue -u <instructor's CNetID>`
-5. **Hello, MPI:** `uv run mpiexec -n 4 python hello_mpi.py`, then
-   `sbatch --ntasks=8 hello.sbatch`
-6. **Every round in one MPI job,** each person with a different number of
-   ranks: numbers 1 and 8 run 1 rank, 2 and 9 run 2, 3 and 10 run 4, 4 and 11
-   run 8, 5 and 12 run 16, 6 and 13 run 32, 7 and 14 run 48:
-   `sbatch --ntasks=<ranks> mpi.sbatch`
-7. **Speedup** (instructor): `uv run python speedup.py`
+`uv sync` installs `blackjack.py` as a module, so the scripts in each folder
+can `import blackjack`. Each folder's README describes its scripts, with
+example output.
 
 ## Common errors
 
 | Symptom | Cause and fix |
 |---|---|
 | `uv: command not found` | uv isn't installed, or this session hasn't read the new `PATH`. Install it (see Setup), or run `source $HOME/.local/bin/env` |
-| A job fails at once and `logs/` has nothing | The `logs` folder doesn't exist, and Slurm doesn't create it. Run `mkdir -p logs` in `~/blackjack` |
+| A job fails at once and `logs/` has nothing | It was submitted from a folder with no `logs/`. `cd ~/blackjack`, run `mkdir -p logs`, and submit again |
+| `sbatch: error: Unable to open file` | The path to the `.sbatch` file is relative to where you are. Submit from `~/blackjack`, as `sbatch mpi/mpi.sbatch` |
 | A job's log shows a uv error about working offline | `uv sync --locked` hasn't run on a login node yet. Run it there, then resubmit |
-| `FileNotFoundError: .../table-round-2.csv` | Round 1 hasn't been assembled yet: run `assemble.py --round 1` |
+| `ModuleNotFoundError: No module named 'blackjack'` | The script ran outside the uv environment. Start it with `uv run` |
+| `FileNotFoundError: .../table-round-2.csv` | Round 1 hasn't been assembled yet: run `slurm/assemble.py --round 1` |
 | `PermissionError` writing to the shared folder | The folder or a `round-N` folder isn't writable by your group. Ask the instructor |
 | `assemble.py` prints `missing rows ...` | Some array tasks failed or haven't finished. Check `squeue`, then run the `sbatch` line it prints |
 | Chain steps stay pending with `(DependencyNeverSatisfied)` | An earlier step failed. `scancel` the rest, fix the cause, and start the chain again from the failed round |

@@ -15,15 +15,19 @@ a 2. A cell holds 1 for hit and 0 for stand.
 
 Each cell's random numbers depend only on the cell, so the same table and the
 same number of hands give the same answer however the cells are split up: one
-Slurm task per row, or any number of MPI ranks.
+Slurm task per row, any number of MPI ranks, or any number of pool workers.
+
+The scripts in slurm/, mpi/ and multiprocessing/ import this file. On its
+own, it prints one cell, or plays whole hands by charts and scores them:
 
     python blackjack.py cell --hand H16 --up 7 --hands 100000
-    python blackjack.py row --row 12 --round 1 --hands 400000 --out round-1/
+    python blackjack.py score table-round-1.csv basic-strategy.csv
 """
 
 import argparse
 import csv
 import os
+import socket
 from pathlib import Path
 
 import numpy as np
@@ -115,6 +119,37 @@ def play(soft, total, up, action, table, hands, rng):
     return r.mean(), r.std(ddof=1) / np.sqrt(hands)
 
 
+def score(table, hands, seed=SEED, chunk=1_000_000):
+    """Play whole hands by a table: the mean result of a $1 bet and its
+    standard error. Blackjack pays 3 to 2, and pushes against a dealer
+    blackjack."""
+    rng = np.random.default_rng(seed)
+    total = total_sq = 0.0
+    done = 0
+    while done < hands:
+        m = min(chunk, hands - done)
+        ups = draw(rng, m)
+        t, s = add_card(np.zeros(m, dtype=int), np.zeros(m, dtype=bool), draw(rng, m))
+        t, s = add_card(t, s, draw(rng, m))
+        naturals = t == 21
+        result = np.empty(m)
+        for col, up in enumerate(UPCARDS):
+            k = ups == up
+            if not k.any():
+                continue
+            d, dealer_bj = dealer(rng, up, int(k.sum()))
+            p, _ = play_on(rng, t[k], s[k], col, table)
+            r = settle(p, d, dealer_bj)
+            nat = naturals[k]
+            r[nat] = np.where(dealer_bj[nat], 0.0, 1.5)
+            result[k] = r
+        total += result.sum()
+        total_sq += (result ** 2).sum()
+        done += m
+    mean = total / hands
+    return mean, np.sqrt((total_sq / hands - mean ** 2) / hands)
+
+
 def simulate_cell(cell, table, hands):
     """Hit and stand in one cell: a dict ready to write as a CSV row."""
     soft, total = ROWS[cell // 10]
@@ -156,6 +191,15 @@ def write_results(results, path):
         w.writerows(results)
 
 
+def record_time(path, method, workers, seconds, rounds, hands):
+    """Append one run to the times CSV that speedup.py reads."""
+    line = f"{method},{workers},{seconds:.2f},{rounds},{hands},{socket.gethostname()}\n"
+    if not Path(path).exists():
+        line = "method,workers,seconds,rounds,hands,node\n" + line
+    with open(path, "a") as f:
+        f.write(line)
+
+
 def next_table(table, results):
     """Switch every simulated cell to the better action. Returns the new
     table and the list of cells that changed."""
@@ -186,36 +230,32 @@ def main():
     one.add_argument("--table", type=Path, default=None,
                      help="table to follow after a hit (default: the starting table)")
 
-    row = sub.add_parser("row", help="one row of cells, written to a CSV")
-    row.add_argument("--row", type=int, required=True, help="0-26")
-    row.add_argument("--round", type=int, required=True)
-    row.add_argument("--hands", type=int, default=400_000, help="hands per action")
-    row.add_argument("--table", type=Path, help="default: LAB/table-round-ROUND.csv")
-    row.add_argument("--out", type=Path, help="default: LAB/round-ROUND/")
+    whole = sub.add_parser("score", help="play whole hands by each chart, printed")
+    whole.add_argument("charts", type=Path, nargs="+", metavar="CHART")
+    whole.add_argument("--hands", type=int, default=1_000_000, help="hands per chart")
 
     a = ap.parse_args()
-    if a.command == "cell":
-        table = a.table or starting_table()
-        cell = 10 * HAND_NAMES.index(a.hand.upper()) + UPCARD_NAMES.index(a.up.upper())
-        r = simulate_cell(cell, read_table(table), a.hands)
-        gap = r["hit"] - r["stand"]
-        two_se = 2 * (r["hit_se"] ** 2 + r["stand_se"] ** 2) ** 0.5
-        if abs(gap) < two_se:
-            verdict = "too close to call"
-        else:
-            verdict = ("hit" if gap > 0 else "stand") + " is better"
-        print(f"{r['hand']} vs {r['up']}, {a.hands:,} hands each "
-              f"(after a hit, follow {table.name})")
-        print(f"  stand {r['stand']:+.4f} ± {r['stand_se']:.4f}")
-        print(f"  hit   {r['hit']:+.4f} ± {r['hit_se']:.4f}")
-        print(f"  hit minus stand {gap:+.4f}, twice its ± {two_se:.4f}: {verdict}")
+    if a.command == "score":
+        print(f"{a.hands:,} hands each, a $1 bet on every hand")
+        for path in a.charts:
+            mean, se = score(read_table(path), a.hands)
+            print(f"  {path.name:24s} {mean:+.4f} ± {se:.4f} per hand: "
+                  f"{'wins' if mean > 0 else 'loses'} {abs(mean) * 100:.1f} cents per $1")
+        return
+    table = a.table or starting_table()
+    cell = 10 * HAND_NAMES.index(a.hand.upper()) + UPCARD_NAMES.index(a.up.upper())
+    r = simulate_cell(cell, read_table(table), a.hands)
+    gap = r["hit"] - r["stand"]
+    two_se = 2 * (r["hit_se"] ** 2 + r["stand_se"] ** 2) ** 0.5
+    if abs(gap) < two_se:
+        verdict = "too close to call"
     else:
-        table = read_table(a.table or LAB / f"table-round-{a.round}.csv")
-        out = a.out or LAB / f"round-{a.round}"
-        out.mkdir(parents=True, exist_ok=True)
-        results = [simulate_cell(c, table, a.hands) for c in range(10 * a.row, 10 * a.row + 10)]
-        write_results(results, out / f"row-{a.row:02d}.csv")
-        print(f"round {a.round}: wrote {out / f'row-{a.row:02d}.csv'}")
+        verdict = ("hit" if gap > 0 else "stand") + " is better"
+    print(f"{r['hand']} vs {r['up']}, {a.hands:,} hands each "
+          f"(after a hit, follow {table.name})")
+    print(f"  stand {r['stand']:+.4f} ± {r['stand_se']:.4f}")
+    print(f"  hit   {r['hit']:+.4f} ± {r['hit_se']:.4f}")
+    print(f"  hit minus stand {gap:+.4f}, twice its ± {two_se:.4f}: {verdict}")
 
 
 if __name__ == "__main__":
